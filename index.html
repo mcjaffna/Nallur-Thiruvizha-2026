@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+<html lang="ta">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>Nallur Festival Facility Finder</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css" />
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, "Noto Sans Tamil", "Noto Sans Sinhala", "Segoe UI", Roboto, sans-serif;
+    background: #0b1220;
+    color: #eef2f7;
+  }
+  header {
+    padding: 12px 14px 10px;
+    background: linear-gradient(135deg, #7a1f2b, #b6392f);
+    text-align: center;
+    position: relative;
+  }
+  .langbar {
+    display: flex;
+    justify-content: center;
+    gap: 6px;
+    margin-bottom: 8px;
+  }
+  .langbtn {
+    padding: 5px 12px;
+    border-radius: 20px;
+    background: rgba(255,255,255,0.15);
+    border: 1px solid rgba(255,255,255,0.35);
+    color: #fff;
+    font-size: 12.5px;
+    cursor: pointer;
+  }
+  .langbtn.active {
+    background: #fff;
+    color: #7a1f2b;
+    font-weight: 700;
+  }
+  header h1 {
+    margin: 0;
+    font-size: 17px;
+    line-height: 1.4;
+  }
+  header p {
+    margin: 4px 0 0;
+    font-size: 12px;
+    opacity: 0.92;
+  }
+  #status {
+    text-align: center;
+    padding: 8px 12px;
+    font-size: 13px;
+    background: #142033;
+  }
+  #status.ok { color: #7ee787; }
+  #status.warn { color: #f2c14e; }
+  #map { height: 44vh; width: 100%; }
+  #list {
+    padding: 10px 12px 80px;
+  }
+  .tabs {
+    display: flex;
+    gap: 8px;
+    padding: 10px 12px 0;
+  }
+  .tab {
+    flex: 1;
+    text-align: center;
+    padding: 8px 4px;
+    border-radius: 10px;
+    background: #142033;
+    font-size: 12.5px;
+    cursor: pointer;
+    border: 1px solid #223350;
+  }
+  .tab.active.water { background: #1c4e80; border-color: #2f7fc9; }
+  .tab.active.toilet { background: #6b3fa0; border-color: #9d6fd9; }
+  .card {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    background: #142033;
+    border: 1px solid #223350;
+    border-radius: 12px;
+    padding: 10px 12px;
+    margin-bottom: 8px;
+  }
+  .card .icon {
+    width: 38px; height: 38px;
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 18px;
+    flex-shrink: 0;
+  }
+  .card.water .icon { background: #1c4e80; }
+  .card.toilet .icon { background: #6b3fa0; }
+  .card .info { flex: 1; min-width: 0; }
+  .card .info .name { font-size: 14.5px; font-weight: 600; }
+  .card .info .dist { font-size: 12.5px; color: #9fb0c9; margin-top: 2px; }
+  .card .go {
+    text-decoration: none;
+    background: #2f7fc9;
+    color: white;
+    font-size: 12px;
+    padding: 7px 10px;
+    border-radius: 8px;
+    white-space: nowrap;
+  }
+  .card.toilet .go { background: #9d6fd9; }
+  .nearest-badge {
+    display: inline-block;
+    font-size: 10.5px;
+    background: #2fa86b;
+    color: #06210f;
+    padding: 1px 7px;
+    border-radius: 20px;
+    margin-left: 6px;
+    font-weight: 700;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="langbar">
+    <div class="langbtn" data-lang="ta" onclick="setLang('ta')">தமிழ்</div>
+    <div class="langbtn" data-lang="si" onclick="setLang('si')">සිංහල</div>
+    <div class="langbtn" data-lang="en" onclick="setLang('en')">English</div>
+  </div>
+  <h1 id="hTitle"></h1>
+  <p id="hSubtitle"></p>
+</header>
+
+<div id="status"></div>
+
+<div id="map"></div>
+
+<div class="tabs">
+  <div class="tab active water" id="tabWater" onclick="setTab('water')"></div>
+  <div class="tab toilet" id="tabToilet" onclick="setTab('toilet')"></div>
+</div>
+
+<div id="list"></div>
+
+<script>
+const strings = {
+  ta: {
+    title: "🛕 நல்லூர் கந்தசுவாமி கோயில் திருவிழா",
+    subtitle: "யாழ்ப்பாண மாநகர சபை வழங்கும் குடிநீர் தொட்டிகள் & பொதுக்கழிப்பறைகள்",
+    statusAsking: "📍 உங்கள் அருகிலுள்ள வசதிகளை காண இருப்பிடத்தை அனுமதிக்கவும்...",
+    statusOk: "✅ உங்கள் இருப்பிடம் கண்டறியப்பட்டது - அருகிலுள்ளவை முதலில் காட்டப்படும்",
+    statusWarn: "⚠️ இருப்பிடம் அனுமதிக்கப்படவில்லை - கீழே உள்ள மேப்பில் அனைத்து இடங்களையும் பாருங்கள்",
+    tabWater: "💧 குடிநீர் தொட்டிகள் (8)",
+    tabToilet: "🚻 பொதுக் கழிப்பறைகள் (2)",
+    go: "வழி காட்டு",
+    nearest: "அருகில்",
+    you: "நீங்கள் இங்கே",
+    distUnavailable: "தூரம் கிடைக்கவில்லை",
+    water: i => `குடிநீர் தொட்டி ${i}`,
+    toilet: i => `பொதுக் கழிப்பறை ${i}`,
+  },
+  si: {
+    title: "🛕 නල්ලූර් කන්දසාමි කෝවිල උත්සවය",
+    subtitle: "යාපනය මහ නගර සභාව සපයන ජල ටැංකි සහ පොදු වැසිකිලි",
+    statusAsking: "📍 ආසන්න පහසුකම් බැලීමට ස්ථානය සඳහා අවසර දෙන්න...",
+    statusOk: "✅ ඔබේ ස්ථානය සොයාගන්නා ලදී - ආසන්නතම ඒවා මුලින්ම පෙන්වයි",
+    statusWarn: "⚠️ ස්ථානයට අවසර දී නැත - පහත සිතියමේ ඇති සියලුම ස්ථාන බලන්න",
+    tabWater: "💧 ජල ටැංකි (8)",
+    tabToilet: "🚻 පොදු වැසිකිලි (2)",
+    go: "මාර්ගය පෙන්වන්න",
+    nearest: "ආසන්නම",
+    you: "ඔබ මෙහි සිටී",
+    distUnavailable: "දුර සොයාගත නොහැක",
+    water: i => `ජල ටැංකිය ${i}`,
+    toilet: i => `පොදු වැසිකිළිය ${i}`,
+  },
+  en: {
+    title: "🛕 Nallur Kandaswamy Temple Festival",
+    subtitle: "Water tanks & public toilets provided by the Jaffna Municipal Council",
+    statusAsking: "📍 Allow location access to see facilities near you...",
+    statusOk: "✅ Your location was found - nearest facilities are shown first",
+    statusWarn: "⚠️ Location access denied - see all facilities on the map below",
+    tabWater: "💧 Water Tanks (8)",
+    tabToilet: "🚻 Public Toilets (2)",
+    go: "Directions",
+    nearest: "Nearest",
+    you: "You are here",
+    distUnavailable: "Distance unavailable",
+    water: i => `Water Tank ${i}`,
+    toilet: i => `Public Toilet ${i}`,
+  }
+};
+
+const rawFacilities = [
+  {type:'water', num:1, lat:9.673900, lon:80.032819},
+  {type:'water', num:2, lat:9.674181, lon:80.030908},
+  {type:'water', num:3, lat:9.673583, lon:80.028844},
+  {type:'water', num:4, lat:9.675675, lon:80.029225},
+  {type:'water', num:5, lat:9.677078, lon:80.028406},
+  {type:'water', num:6, lat:9.674575, lon:80.028144},
+  {type:'water', num:7, lat:9.674431, lon:80.027564},
+  {type:'water', num:8, lat:9.675506, lon:80.022864},
+  {type:'toilet', num:1, lat:9.673258, lon:80.027594},
+  {type:'toilet', num:2, lat:9.673856, lon:80.034178},
+];
+
+let userLat = null, userLon = null;
+let currentTab = 'water';
+let currentLang = 'ta';
+
+const map = L.map('map').setView([9.6745, 80.0290], 16);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+  attribution: '&copy; OpenStreetMap contributors'
+}).addTo(map);
+
+const waterIcon = L.divIcon({html:'💧', className:'', iconSize:[26,26]});
+const toiletIcon = L.divIcon({html:'🚻', className:'', iconSize:[26,26]});
+const userIcon = L.divIcon({html:'🧍', className:'', iconSize:[26,26]});
+
+rawFacilities.forEach(f => {
+  f.marker = L.marker([f.lat, f.lon], {icon: f.type === 'water' ? waterIcon : toiletIcon}).addTo(map);
+});
+
+function haversine(lat1, lon1, lat2, lon2) {
+  const R = 6371000;
+  const toRad = d => d * Math.PI / 180;
+  const dLat = toRad(lat2 - lat1);
+  const dLon = toRad(lon2 - lon1);
+  const a = Math.sin(dLat/2)**2 + Math.cos(toRad(lat1))*Math.cos(toRad(lat2))*Math.sin(dLon/2)**2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+}
+
+function fmtDist(m) {
+  if (m < 1000) return Math.round(m) + (currentLang === 'en' ? ' m' : currentLang === 'si' ? ' මී' : ' மீ');
+  return (m/1000).toFixed(2) + (currentLang === 'en' ? ' km' : currentLang === 'si' ? ' කි.මී' : ' கி.மீ');
+}
+
+function facilityName(f) {
+  return strings[currentLang][f.type](f.num);
+}
+
+function setLang(lang) {
+  currentLang = lang;
+  document.querySelectorAll('.langbtn').forEach(b => b.classList.toggle('active', b.dataset.lang === lang));
+  const s = strings[lang];
+  document.getElementById('hTitle').textContent = s.title;
+  document.getElementById('hSubtitle').textContent = s.subtitle;
+  document.getElementById('tabWater').textContent = s.tabWater;
+  document.getElementById('tabToilet').textContent = s.tabToilet;
+
+  const statusEl = document.getElementById('status');
+  if (userLat !== null) {
+    statusEl.textContent = s.statusOk;
+    statusEl.className = 'ok';
+  } else if (window._locateFailed) {
+    statusEl.textContent = s.statusWarn;
+    statusEl.className = 'warn';
+  } else {
+    statusEl.textContent = s.statusAsking;
+    statusEl.className = '';
+  }
+
+  rawFacilities.forEach(f => f.marker.bindPopup(facilityName(f)));
+  if (window._userMarker) window._userMarker.bindPopup(s.you);
+  render();
+}
+
+function setTab(type) {
+  currentTab = type;
+  document.getElementById('tabWater').classList.toggle('active', type==='water');
+  document.getElementById('tabToilet').classList.toggle('active', type==='toilet');
+  render();
+}
+
+function render() {
+  const s = strings[currentLang];
+  const listEl = document.getElementById('list');
+  listEl.innerHTML = '';
+  let items = rawFacilities.filter(f => f.type === currentTab);
+
+  if (userLat !== null) {
+    items.forEach(f => f.dist = haversine(userLat, userLon, f.lat, f.lon));
+    items.sort((a,b) => a.dist - b.dist);
+  }
+
+  items.forEach((f, idx) => {
+    const card = document.createElement('div');
+    card.className = 'card ' + f.type;
+    const icon = f.type === 'water' ? '💧' : '🚻';
+    const distText = f.dist !== undefined ? fmtDist(f.dist) : s.distUnavailable;
+    const badge = (idx === 0 && f.dist !== undefined) ? `<span class="nearest-badge">${s.nearest}</span>` : '';
+    card.innerHTML = `
+      <div class="icon">${icon}</div>
+      <div class="info">
+        <div class="name">${facilityName(f)}${badge}</div>
+        <div class="dist">${distText}</div>
+      </div>
+      <a class="go" target="_blank" href="https://www.google.com/maps/dir/?api=1&destination=${f.lat},${f.lon}">${s.go}</a>
+    `;
+    card.onclick = (e) => {
+      if (e.target.tagName !== 'A') {
+        map.setView([f.lat, f.lon], 18);
+        f.marker.openPopup();
+      }
+    };
+    listEl.appendChild(card);
+  });
+}
+
+function locateUser(pos) {
+  userLat = pos.coords.latitude;
+  userLon = pos.coords.longitude;
+  const s = strings[currentLang];
+  const statusEl = document.getElementById('status');
+  statusEl.textContent = s.statusOk;
+  statusEl.className = 'ok';
+
+  if (!window._userMarker) {
+    window._userMarker = L.marker([userLat, userLon], {icon: userIcon}).addTo(map).bindPopup(s.you);
+  } else {
+    window._userMarker.setLatLng([userLat, userLon]);
+  }
+  render();
+}
+
+function locateError() {
+  window._locateFailed = true;
+  const s = strings[currentLang];
+  const statusEl = document.getElementById('status');
+  statusEl.textContent = s.statusWarn;
+  statusEl.className = 'warn';
+  render();
+}
+
+if (navigator.geolocation) {
+  navigator.geolocation.getCurrentPosition(locateUser, locateError, {enableHighAccuracy:true, timeout:8000});
+  navigator.geolocation.watchPosition(locateUser, locateError, {enableHighAccuracy:true});
+} else {
+  locateError();
+}
+
+setLang('ta');
+</script>
+
+</body>
+</html>
